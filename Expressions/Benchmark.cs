@@ -8,35 +8,62 @@ namespace Expressions;
 [RankColumn]
 public class Benchmark
 {
-    public List<Person> People = DataGenerator.GeneratePeople(10000);
-    public List<string> Properties = ["Country", "Age"];
-    public Dictionary<string, IEnumerable<object>> Filters = new Dictionary<string, IEnumerable<object>>
-    {
-        {"Country", ["USA", "Mexico"] },
-        {"Age", [20,25,30] }
-    };
+    [Params(100, 10000, 100000)]
+    public int DataSize { get; set; }
 
-    [Benchmark]
-    public void GroupPeople()
+    private List<Person> People;
+    private List<string> PropertiesToGroup;
+    private Dictionary<string, IEnumerable<object>> Filters;
+
+    [GlobalSetup]
+    public void Setup()
     {
-        var groupings = People.GroupByProperties(Properties);
+        People = DataGenerator.GeneratePeople(DataSize);
+        PropertiesToGroup = ["Country", "Name", "Age"];
+        Filters = new()
+        {
+            {"Country", ["USA", "Mexico" ]},
+            {"Age", [20, 25, 30]},
+        };
+    }
+
+    [Benchmark(Baseline = true)]
+    public void BaselineNoOperations()
+    {
+        People.ToList();
     }
 
     [Benchmark]
-    public void GroupPeopleCached()
+    public void GroupPeopleStatic()
     {
-        var groupings = People.GroupByPropertiesCached(Properties);
+        People
+            .GroupBy(x => (x.Country, x.Name, x.Age))
+            .ToList();
     }
 
     [Benchmark]
-    public void FilterPeople()
+    public void GroupPeopleDynamic()
     {
-        var filtered = People.FilterByProperties(Filters);
+        var groupingExpression = ExpressionBuilder.BuildGroupingExpression<Person>(PropertiesToGroup);
+        People
+            .GroupBy(groupingExpression)
+            .ToList();
     }
 
     [Benchmark]
-    public void FilterPeopleCached()
+    public void FilterPeopleStatic()
     {
-        var filtered = People.FilterByPropertiesCached(Filters);
+        People
+            .Where(x => Filters["Country"].Contains(x.Country) && Filters["Age"].Contains(x.Age))
+            .ToList();
+    }
+
+    [Benchmark]
+    public void FilterPeopleDynamic()
+    {
+        var filteringExpression = ExpressionBuilder.BuildFilterExpression<Person>(Filters);
+        People
+            .Where(filteringExpression)
+            .ToList();
     }
 }
